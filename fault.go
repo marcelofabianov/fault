@@ -12,6 +12,7 @@ const (
 	Unauthorized    Code = "unauthorized"
 	Forbidden       Code = "forbidden"
 	DomainViolation Code = "domain_violation"
+	InfraError      Code = "infra_error"
 )
 
 type Error struct {
