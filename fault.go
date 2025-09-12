@@ -1,6 +1,10 @@
 package fault
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"net/http"
+)
 
 type Code string
 
@@ -96,4 +100,66 @@ func NewInternalError(err error, context map[string]any) *Error {
 		opts = append(opts, WithContext(k, v))
 	}
 	return New("An unexpected internal error occurred.", opts...)
+}
+
+func IsCode(err error, code Code) bool {
+	for err != nil {
+		if fErr, ok := err.(*Error); ok {
+			if fErr.Code == code {
+				return true
+			}
+		}
+		err = errors.Unwrap(err)
+	}
+	return false
+}
+
+func IsDomainViolation(err error) bool {
+	return IsCode(err, DomainViolation)
+}
+
+func IsInfraError(err error) bool {
+	return IsCode(err, InfraError)
+}
+
+func IsNotFound(err error) bool {
+	return IsCode(err, NotFound)
+}
+
+func IsUnauthorized(err error) bool {
+	return IsCode(err, Unauthorized)
+}
+
+func IsForbidden(err error) bool {
+	return IsCode(err, Forbidden)
+}
+
+func IsConflict(err error) bool {
+	return IsCode(err, Conflict)
+}
+
+func IsInvalid(err error) bool {
+	return IsCode(err, Invalid)
+}
+
+func IsInternal(err error) bool {
+	return IsCode(err, Internal)
+}
+
+var httpStatusCodes = map[Code]int{
+	Invalid:         http.StatusBadRequest,
+	Conflict:        http.StatusConflict,
+	NotFound:        http.StatusNotFound,
+	Unauthorized:    http.StatusUnauthorized,
+	Forbidden:       http.StatusForbidden,
+	DomainViolation: http.StatusUnprocessableEntity,
+	InfraError:      http.StatusBadGateway,
+	Internal:        http.StatusInternalServerError,
+}
+
+func GetHTTPStatusCode(code Code) int {
+	if statusCode, ok := httpStatusCodes[code]; ok {
+		return statusCode
+	}
+	return http.StatusInternalServerError
 }

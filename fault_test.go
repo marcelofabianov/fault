@@ -2,6 +2,7 @@ package fault
 
 import (
 	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,4 +67,74 @@ func TestHelperConstructors(t *testing.T) {
 		assert.Equal(t, "payment", err.Context["service"])
 		assert.ErrorContains(t, err, "timeout")
 	})
+}
+
+func TestIsCode(t *testing.T) {
+	t.Run("Check IsCode on a wrapped error chain", func(t *testing.T) {
+		originalErr := New("validation failed", WithCode(Invalid))
+		wrappedErr := Wrap(originalErr, "could not process request")
+
+		// Debugging steps
+		t.Logf("wrappedErr type: %T, value: %+v", wrappedErr, wrappedErr)
+		t.Logf("wrappedErr.Unwrap() type: %T, value: %+v", wrappedErr.Unwrap(), wrappedErr.Unwrap())
+		t.Logf("IsCode result: %t", IsCode(wrappedErr, Invalid))
+
+		assert.True(t, IsCode(wrappedErr, Invalid)) // Linha 83
+		assert.False(t, IsCode(wrappedErr, NotFound))
+	})
+}
+
+func TestGetHTTPStatusCode(t *testing.T) {
+	t.Run("Check all known fault codes", func(t *testing.T) {
+		testCases := map[Code]int{
+			Invalid:         http.StatusBadRequest,
+			Conflict:        http.StatusConflict,
+			NotFound:        http.StatusNotFound,
+			Unauthorized:    http.StatusUnauthorized,
+			Forbidden:       http.StatusForbidden,
+			DomainViolation: http.StatusUnprocessableEntity,
+			InfraError:      http.StatusBadGateway,
+			Internal:        http.StatusInternalServerError,
+		}
+
+		for code, expectedStatus := range testCases {
+			t.Run(string(code), func(t *testing.T) {
+				status := GetHTTPStatusCode(code)
+				assert.Equal(t, expectedStatus, status, "Expected status for code %s", code)
+			})
+		}
+	})
+
+	t.Run("Check a code with no mapping", func(t *testing.T) {
+		const NewCode Code = "new_test_code"
+		status := GetHTTPStatusCode(NewCode)
+		assert.Equal(t, http.StatusInternalServerError, status)
+	})
+}
+
+func TestIsSpecificCodes(t *testing.T) {
+	testCases := []struct {
+		name     string
+		errCode  Code
+		isFunc   func(error) bool
+		expected bool
+	}{
+		{"IsDomainViolation", DomainViolation, IsDomainViolation, true},
+		{"IsInfraError", InfraError, IsInfraError, true},
+		{"IsNotFound", NotFound, IsNotFound, true},
+		{"IsUnauthorized", Unauthorized, IsUnauthorized, true},
+		{"IsForbidden", Forbidden, IsForbidden, true},
+		{"IsConflict", Conflict, IsConflict, true},
+		{"IsInvalid", Invalid, IsInvalid, true},
+		{"IsInternal", Internal, IsInternal, true},
+		{"IsDomainViolation (negative)", NotFound, IsDomainViolation, false},
+		{"IsInternal (negative)", Invalid, IsInternal, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := New("test error", WithCode(tc.errCode))
+			assert.Equal(t, tc.expected, tc.isFunc(err))
+		})
+	}
 }
