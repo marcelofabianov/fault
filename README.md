@@ -165,8 +165,6 @@ func main() {
 	// Saída: HTTP Status Code: 403
 
 	// Serializando a resposta para JSON
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
 	encoder.Encode(response)
 	/*
 	{
