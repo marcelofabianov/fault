@@ -1,5 +1,9 @@
 package fault
 
+import "errors"
+
+var ErrValidation = errors.New("validation failed")
+
 type Option func(*Error)
 
 func New(message string, opts ...Option) *Error {

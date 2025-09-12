@@ -1,4 +1,4 @@
-# fault
+# fault v2
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/marcelofabianov/fault)](https://goreportcard.com/report/github.com/marcelofabianov/fault)
 [![Go Reference](https://pkg.go.dev/badge/github.com/marcelofabianov/fault.svg)](https://pkg.go.dev/github.com/marcelofabianov/fault)
@@ -6,154 +6,294 @@
 
 `fault` é uma biblioteca Go leve, porém poderosa, para a criação de erros estruturados e ricos em contexto. Ela foi projetada para permitir que as aplicações modelem suas falhas de forma clara e consistente através de todas as camadas da arquitetura, desde o domínio até a apresentação.
 
-## ✨ Principais Funcionalidades
+## Principais Funcionalidades
 
 * **Erros Estruturados:** Crie erros com códigos, mensagens e um mapa de contexto customizável para facilitar a depuração e o logging.
 * **Error Wrapping Idiomático:** Totalmente compatível com o pacote `errors` do Go, incluindo `errors.Is` e `errors.As`.
 * **API Fluida:** Use o padrão *Functional Options* para construir erros de forma declarativa e legível.
 * **Erros Aninhados:** Suporte para múltiplos erros detalhados, ideal para cenários complexos como a validação de formulários.
-* **Desacoplado de Protocolos:** O núcleo do `fault` é agnóstico a protocolos. Utilitários para APIs web (HTTP) estão disponíveis em um sub-pacote (`httputil`) para manter as responsabilidades separadas.
 
-## 🚀 Instalação
+## Instalação
 
 ```bash
-go get [github.com/marcelofabianov/fault](https://github.com/marcelofabianov/fault)
+go get github.com/marcelofabianov/fault
 ```
 
-## 💡 Uso e Conceitos
+## Uso e Conceitos
 
-### Criação Básica de Erros
+### 1. Construtores
 
-Use `fault.New` para criar um erro simples e o padrão *Functional Options* para enriquecê-lo.
-
-```go
-import "[github.com/marcelofabianov/fault](https://github.com/marcelofabianov/fault)"
-
-// Um erro simples com um código
-err := fault.New(
-    "user not found",
-    fault.WithCode(fault.NotFound),
-    fault.WithContext("user_id", "usr-123"),
-)
-
-fmt.Println(err)
-// Saída: user not found
-```
-
-### Embrulhando (Wrapping) Erros Existentes
-
-Use `fault.Wrap` para adicionar contexto de negócio a um erro técnico de uma camada inferior.
+Funções para criar novos erros e adicionar informações contextuais.
 
 ```go
+package main
+
 import (
-    "os"
-    "[github.com/marcelofabianov/fault](https://github.com/marcelofabianov/fault)"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/marcelofabianov/fault"
 )
 
-func readFile() error {
-    f, err := os.Open("meu-arquivo.txt")
-    if err != nil {
-        // Envolve o erro original 'os.PathError' com nosso erro estruturado
-        return fault.Wrap(err,
-            "failed to open configuration file",
-            fault.WithCode(fault.Internal),
-            fault.WithContext("filename", "meu-arquivo.txt"),
-        )
-    }
-    defer f.Close()
-    return nil
+func main() {
+	// Criação de um erro de validação com contexto e um erro original
+	err := fault.NewValidationError(
+		errors.New("email is already in use"),
+		"User data is invalid",
+		map[string]any{"field": "email"},
+	)
+
+	// Criação de um erro de domínio simples
+	domainErr := fault.New("Account is suspended", fault.WithCode(fault.DomainViolation))
+
+	// Criando um erro que encapsula outro
+	wrappedErr := fault.Wrap(
+		err,
+		"Failed to create new user account",
+		fault.WithDetails(domainErr),
+	)
+
+	fmt.Println(wrappedErr.Error())
+	// Saída: Failed to create new user account: User data is invalid: email is already in use
 }
 ```
 
-### Erros de Validação com Detalhes
+### 2. Verificadores
 
-O campo `Details` é perfeito para retornar múltiplos erros de uma só vez.
-
-```go
-import "[github.com/marcelofabianov/fault](https://github.com/marcelofabianov/fault)"
-
-func validateRequest(email, password string) error {
-    var details []*fault.Error
-
-    if email == "" {
-        details = append(details, fault.New("email is required", fault.WithContext("field", "email")))
-    }
-    if password == "" {
-        details = append(details, fault.New("password is required", fault.WithContext("field", "password")))
-    }
-
-    if len(details) > 0 {
-        return fault.New(
-            "validation failed",
-            fault.WithCode(fault.Invalid),
-            fault.WithDetails(details...),
-        )
-    }
-
-    return nil
-}
-```
-
-### Integração com APIs HTTP (`httputil`)
-
-O sub-pacote `httputil` ajuda a traduzir um `*fault.Error` em uma resposta JSON padronizada.
+Funções para verificar o tipo ou código de um erro de forma segura, percorrendo a cadeia de erros.
 
 ```go
+package main
+
 import (
-    "encoding/json"
-    "net/http"
+	"errors"
+	"fmt"
 
-    "[github.com/marcelofabianov/fault](https://github.com/marcelofabianov/fault)"
-    "[github.com/marcelofabianov/fault/httputil](https://github.com/marcelofabianov/fault/httputil)"
+	"github.com/marcelofabianov/fault"
 )
 
-// Em sua camada de serviço:
-func findUser(userID string) *fault.Error {
-    if userID == "" {
-        return fault.New("user ID cannot be empty", fault.WithCode(fault.Invalid))
-    }
-    // ... lógica para buscar o usuário ...
-    return fault.New("user not found", fault.WithCode(fault.NotFound), fault.WithContext("searched_id", userID))
-}
+func main() {
+	// Exemplo de um erro complexo
+	validationErr := fault.New("email is invalid", fault.WithCode(fault.Invalid))
+	wrappedErr := fault.Wrap(validationErr, "could not process request")
 
+	// Usando a função IsCode para verificar o código em qualquer nível da cadeia
+	if fault.IsCode(wrappedErr, fault.Invalid) {
+		fmt.Println("Error is of type 'invalid_input'")
+	}
 
-// Em seu HTTP handler:
-func GetUserHandler(w http.ResponseWriter, r *http.Request) {
-    // A lógica de negócio retorna um *fault.Error
-    err := findUser("user-abc")
+	// Usando as funções de verificação específicas
+	if fault.IsInvalid(wrappedErr) {
+		fmt.Println("Using the specific checker for 'invalid_input'")
+	}
 
-    if err != nil {
-        // Converte o erro em uma resposta JSON com o código de status correto
-        response := httputil.ToResponse(err)
+	// Cenário negativo
+	if !fault.IsNotFound(wrappedErr) {
+		fmt.Println("Error is not of type 'not_found'")
+	}
 
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(response.StatusCode)
-        json.NewEncoder(w).Encode(response)
-        return
-    }
-
-    // ... lógica de sucesso ...
+	// Verificando um erro genérico
+	if !fault.IsCode(errors.New("a simple error"), fault.Internal) {
+		fmt.Println("Generic error is not a 'fault' error")
+	}
 }
 ```
 
-#### Exemplo de Resposta JSON de Erro
+### 3. Utilitários HTTP
 
-O handler acima, ao receber o erro `NotFound`, produziria a seguinte resposta JSON com status `404 Not Found`:
+Utilitários para converter códigos de erro internos em códigos de status HTTP padrão, ideal para a camada de API.
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/marcelofabianov/fault"
+)
+
+func main() {
+	// Mapeando um código de erro para um status HTTP
+	statusCode := fault.GetHTTPStatusCode(fault.NotFound)
+	fmt.Printf("HTTP Status for 'not_found' is: %d\n", statusCode)
+	// Saída: HTTP Status for 'not_found' is: 404
+
+	// Mapeando um código de erro de negócio para 422 Unprocessable Entity
+	domainStatus := fault.GetHTTPStatusCode(fault.DomainViolation)
+	fmt.Printf("HTTP Status for 'domain_violation' is: %d\n", domainStatus)
+	// Saída: HTTP Status for 'domain_violation' is: 422
+
+	// Um código de erro desconhecido retorna 500
+	unknownStatus := fault.GetHTTPStatusCode("unknown_code")
+	fmt.Printf("HTTP Status for an unknown code is: %d\n", unknownStatus)
+	// Saída: HTTP Status for an unknown code is: 500
+}
+```
+
+### 4. Respostas HTTP
+
+A seguir, um exemplo de como converter um erro de acesso negado em uma resposta HTTP serializável. A estrutura ErrorResponse encapsula todas as informações relevantes, incluindo o código de erro (forbidden) e contexto, que podem ser usados pela aplicação cliente para exibir uma mensagem adequada.
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+
+	"github.com/marcelofabianov/fault"
+)
+
+func main() {
+	// Simulação de um erro de acesso negado, sem permissão para executar a operação.
+	err := fault.New(
+		"Access denied: you do not have permission to perform this action.",
+		fault.WithCode(fault.Forbidden),
+		fault.WithContext("user_id", "12345"),
+		fault.WithContext("required_role", "admin"),
+	)
+
+	// Convertendo o erro para uma estrutura de resposta HTTP
+	response := fault.ToResponse(err)
+
+	// Imprimindo o status code para a camada de framework
+	fmt.Printf("HTTP Status Code: %d\n", response.StatusCode)
+	// Saída: HTTP Status Code: 403
+
+	// Serializando a resposta para JSON
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	encoder.Encode(response)
+	/*
+	{
+	  "message": "Access denied: you do not have permission to perform this action.",
+	  "code": "forbidden",
+	  "context": {
+	    "required_role": "admin",
+	    "user_id": "12345"
+	  }
+	}
+	*/
+}
+```
+
+### 5. Integrando com `go-playground/validator`
+
+O pacote `fault` oferece uma maneira fluida de integrar bibliotecas de validação, como o `go-playground/validator/v10`, convertendo seus erros específicos em um formato estruturado e consistente. Essa abordagem simplifica a camada de API, garantindo que todos os erros de validação sigam um único padrão.
+
+Para isso, o pacote `fault` expõe o erro sentinela `ErrValidation` e uma função de conveniência que faz toda a conversão para você.
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/marcelofabianov/fault"
+)
+
+// RequestBody represents a request payload to be validated.
+type RequestBody struct {
+	Name  string `json:"name" validate:"required"`
+	Email string `json:"email" validate:"required,email"`
+	Age   int    `json:"age" validate:"gte=18"`
+}
+
+func main() {
+	validate := validator.New()
+
+	// Simula um handler de API
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req RequestBody
+		// Simula um erro de validação
+		if errs := validate.Struct(req); errs != nil {
+			// Converte os erros do validador para um fault.Error
+			faultErr := fault.NewValidationErrorFromValidator(errs.(validator.ValidationErrors))
+
+			// O desenvolvedor pode agora verificar o erro de forma idiomática
+			if errors.Is(faultErr, fault.ErrValidation) {
+				response := fault.ToResponse(faultErr)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(response.StatusCode)
+				json.NewEncoder(w).Encode(response)
+			}
+		}
+	})
+
+	// Executa o handler e captura a resposta
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// Imprime a resposta completa para fins de demonstração
+	// Status HTTP: 400 Bad Request
+	// Body: {"message":"Request validation failed", ...}
+	fmt.Printf("HTTP Status Code: %d\n", rr.Code)
+	fmt.Println("---")
+	fmt.Println("HTTP Response Body (JSON):")
+	fmt.Println(rr.Body.String())
+}
+```
+
+A saída do console seria:
+
+```sh
+HTTP Status Code: 400
+---
+HTTP Response Body (JSON):
+{"message":"Request validation failed","code":"invalid_input","details":[{"message":"validation failed on field 'Name'","code":"invalid_input","context":{"field":"Name","param":"","tag":"required"}},{"message":"validation failed on field 'Email'","code":"invalid_input","context":{"field":"Email","param":"","tag":"required"}},{"message":"validation failed on field 'Age'","code":"invalid_input","context":{"field":"Age","param":"18","tag":"gte"}}]}
+```
+
+O json de saída formato:
 
 ```json
 {
-    "message": "user not found",
-    "code": "not_found",
-    "context": {
-        "searched_id": "user-abc"
+  "message": "Request validation failed",
+  "code": "invalid_input",
+  "details": [
+    {
+      "message": "validation failed on field 'Name'",
+      "code": "invalid_input",
+      "context": {
+        "field": "Name",
+        "tag": "required",
+        "param": ""
+      }
+    },
+    {
+      "message": "validation failed on field 'Email'",
+      "code": "invalid_input",
+      "context": {
+        "field": "Email",
+        "tag": "required",
+        "param": ""
+      }
+    },
+    {
+      "message": "validation failed on field 'Age'",
+      "code": "invalid_input",
+      "context": {
+        "field": "Age",
+        "tag": "gte",
+        "param": "18"
+      }
     }
+  ]
 }
 ```
 
-## 🤝 Contribuições
+## Contribuições
 
 Contribuições são bem-vindas! Sinta-se à vontade para abrir uma *issue* para discutir novas funcionalidades ou reportar bugs.
 
-## 📄 Licença
+## Licença
 
 Este projeto é distribuído sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
