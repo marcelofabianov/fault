@@ -1,4 +1,4 @@
-# fault v2
+# fault
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/marcelofabianov/fault)](https://goreportcard.com/report/github.com/marcelofabianov/fault)
 [![Go Reference](https://pkg.go.dev/badge/github.com/marcelofabianov/fault.svg)](https://pkg.go.dev/github.com/marcelofabianov/fault)

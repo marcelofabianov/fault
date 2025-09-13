@@ -1,5 +1,9 @@
 package fault
 
+import (
+	"errors"
+)
+
 type ErrorResponse struct {
 	StatusCode int             `json:"-"`
 	Message    string          `json:"message"`
@@ -8,8 +12,14 @@ type ErrorResponse struct {
 	Details    []ErrorResponse `json:"details,omitempty"`
 }
 
-func ToResponse(err *Error) ErrorResponse {
-	return toResponse(err)
+func ToResponse(err error) ErrorResponse {
+	var fErr *Error
+
+	if !errors.As(err, &fErr) {
+		fErr = Wrap(err, "An unexpected internal error occurred.", WithCode(Internal))
+	}
+
+	return toResponse(fErr)
 }
 
 func toResponse(err *Error) ErrorResponse {
