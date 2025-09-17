@@ -61,4 +61,42 @@ func TestCheckers(t *testing.T) {
 		assert.True(t, fault.IsInvalid(wrappedError), "should be true for a wrapped 'Invalid' error")
 		assert.False(t, fault.IsNotFound(wrappedError), "should be false for a wrapped 'NotFound' error")
 	})
+
+	t.Run("AsFault should work correctly", func(t *testing.T) {
+		t.Run("should return true and the error for a direct fault.Error", func(t *testing.T) {
+			originalErr := fault.New("direct error", fault.WithCode(fault.Internal))
+			fErr, ok := fault.AsFault(originalErr)
+
+			assert.True(t, ok)
+			assert.NotNil(t, fErr)
+			assert.Same(t, originalErr, fErr)
+			assert.Equal(t, "direct error", fErr.Message)
+		})
+
+		t.Run("should return true and the error for a wrapped fault.Error", func(t *testing.T) {
+			originalErr := fault.New("db connection failed", fault.WithCode(fault.InfraError))
+			wrappedErr := fault.Wrap(originalErr, "could not fetch user")
+			fErr, ok := fault.AsFault(wrappedErr)
+
+			assert.True(t, ok)
+			assert.NotNil(t, fErr)
+			assert.Same(t, wrappedErr, fErr)
+			assert.Equal(t, "could not fetch user", fErr.Message)
+		})
+
+		t.Run("should return false for a generic error", func(t *testing.T) {
+			genericErr := errors.New("generic error")
+			fErr, ok := fault.AsFault(genericErr)
+
+			assert.False(t, ok)
+			assert.Nil(t, fErr)
+		})
+
+		t.Run("should return false for a nil error", func(t *testing.T) {
+			fErr, ok := fault.AsFault(nil)
+
+			assert.False(t, ok)
+			assert.Nil(t, fErr)
+		})
+	})
 }

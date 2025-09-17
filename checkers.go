@@ -2,6 +2,12 @@ package fault
 
 import "errors"
 
+func AsFault(err error) (*Error, bool) {
+	var fErr *Error
+	ok := errors.As(err, &fErr)
+	return fErr, ok
+}
+
 func IsCode(err error, code Code) bool {
 	for err != nil {
 		if fErr, ok := err.(*Error); ok {
