@@ -1,13 +1,3 @@
-Com certeza, Marcelo.
-
-Com base em todas as nossas discussões, melhorias no código e o plano que traçamos para a documentação, preparei a versão final e aprimorada do README.md.
-
-Este documento agora segue a "jornada do desenvolvedor", começando com um Quick Start prático e avançando para padrões de uso do mundo real, como havíamos planejado.
-
-Aqui está o README.md completo em um único bloco, pronto para ser copiado.
-
-Markdown
-
 # fault
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/marcelofabianov/fault)](https://goreportcard.com/report/github.com/marcelofabianov/fault)
