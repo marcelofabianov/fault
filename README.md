@@ -225,7 +225,7 @@ Converta os erros detalhados da biblioteca `go-playground/validator` em um únic
 
 Imagine uma requisição com o seguinte `RequestBody`:
 
-```json
+```go
 type RequestBody struct {
     Name  string `json:"name" validate:"required"`
     Email string `json:"email" validate:"required,email"`
