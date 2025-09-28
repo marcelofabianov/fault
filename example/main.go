@@ -43,12 +43,15 @@ func main() {
 	// --- Cenário 2: Not Found (produzirá uma saída de erro) ---
 	_, err = userService.FindUserByID("0199910f-a9b8-7440-8438-2c49c7e0f21c")
 	handleError(err)
+	// {"time":"2025-09-28T13:15:22.833251915-03:00","level":"ERROR","msg":"Operação falhou","message":"user not found","code":"not_found","context":{"aggregate":"user","user_id":"0199910f-a9b8-7440-8438-2c49c7e0f21c"}}
 
 	// --- Cenário 3: Inativo (produzirá uma saída de erro) ---
 	_, err = userService.FindUserByID("0199910f-4238-7882-a075-b7842b4d41f0")
 	handleError(err)
+	// {"time":"2025-09-28T13:15:22.833345841-03:00","level":"ERROR","msg":"Operação falhou","message":"user inactive","code":"domain_violation","context":{"aggregate":"user","user_id":"0199910f-4238-7882-a075-b7842b4d41f0"}}
 
 	// --- Cenário 4: Conflito (produzirá uma saída de erro) ---
 	err = userService.RegisterUser("0199910e-d028-7e10-aa14-3954e781a9bc", "Jane Doe", "jane.doe@example.com")
 	handleError(err)
+	// {"time":"2025-09-28T13:15:22.833352092-03:00","level":"ERROR","msg":"Operação falhou","message":"user already exists","code":"conflict","context":{"aggregate":"user","id":"0199910e-d028-7e10-aa14-3954e781a9bc"}}
 }
